@@ -3,7 +3,7 @@ import { SceneManager } from './scene.js';
 import { Planet } from './planet.js';
 import { FlowEngine } from './flow-engine.js';
 import { UIManager } from './ui-manager.js';
-import { MODES, TOOLS } from './constants.js';
+import { MODES, TOOLS, EDIT } from './constants.js';
 
 class App {
     constructor() {
@@ -62,22 +62,20 @@ class App {
 
         if (intersects.length > 0) {
             const hit = intersects[0];
-            const pos = hit.point.clone();
             
-            // Map hit point back to sphere surface (ignoring current deformation)
-            // We use the initial vertex data logic here
-            const surfacePos = pos.clone().normalize().multiplyScalar(5);
+            // Convert the world hit point to local space to account for planet rotation
+            const localPos = this.planet.mesh.worldToLocal(hit.point.clone());
 
             if (this.ui.state.mode === MODES.EDIT) {
-                const delta = this.ui.state.tool === TOOLS.ADD ? 0.05 : -0.05;
-                this.planet.setElevation(surfacePos, delta, true);
+                const delta = this.ui.state.tool === TOOLS.ADD ? EDIT.STRENGTH : -EDIT.STRENGTH;
+                this.planet.deform(localPos, delta, EDIT.BRUSH_RADIUS);
             } else if (isInitialClick) {
                 if (this.ui.state.mode === MODES.FLOW) {
-                    this.flowEngine.startFlow(pos, true);
+                    this.flowEngine.startFlow(localPos, true);
                 } else if (this.ui.state.mode === MODES.SPRING) {
-                    this.flowEngine.startFlow(pos, true);
+                    this.flowEngine.startFlow(localPos, true);
                 } else if (this.ui.state.mode === MODES.VOLCANO) {
-                    this.flowEngine.startFlow(pos, false);
+                    this.flowEngine.startFlow(localPos, false);
                 }
             }
         }

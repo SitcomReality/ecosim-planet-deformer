@@ -15,19 +15,19 @@ export class FlowEngine {
         const material = new THREE.MeshBasicMaterial({ color: 0x00aaff });
         this.tracerMesh = new THREE.Mesh(geometry, material);
         this.tracerMesh.visible = false;
-        this.scene.add(this.tracerMesh);
+        // Make tracer a child of the planet so it moves with its rotation
+        this.planet.mesh.add(this.tracerMesh);
     }
 
-    startFlow(startPosition, isWater = true) {
+    startFlow(localStartPosition, isWater = true) {
         const flow = {
-            position: startPosition.clone(),
+            position: localStartPosition.clone(),
             distance: 0,
             isWater: isWater,
             active: true
         };
         this.activeFlows.push(flow);
         
-        // If it's a one-off trace, we use the visible tracer mesh
         if (this.activeFlows.length === 1) {
             this.tracerMesh.visible = true;
             this.tracerMesh.material.color.set(isWater ? 0x00aaff : 0xff4400);
@@ -35,9 +35,9 @@ export class FlowEngine {
     }
 
     computeGradient(pos) {
-        const epsilon = 0.15;
+        const epsilon = 0.2;
         const getElevation = (offset) => {
-            const p = pos.clone().add(offset).normalize().multiplyScalar(5);
+            const p = pos.clone().add(offset);
             return this.planet.getElevation(p);
         };
 
@@ -64,22 +64,17 @@ export class FlowEngine {
             const gradient = this.computeGradient(flow.position);
             const surfaceNormal = flow.position.clone().normalize();
             
-            // Move direction: combination of "downhill" and gravity (pulling towards surface center isn't movement)
-            // Project gradient onto tangent plane to stay on surface
             const moveDir = gradient.clone().projectOnPlane(surfaceNormal).negate();
             
-            if (moveDir.length() < 0.001) {
-                // At a local minimum
+            if (moveDir.length() < 0.0001) {
                 flow.active = false;
             } else {
                 flow.position.add(moveDir.setLength(FLOW.TRACER_SPEED));
-                // Constrain to planet surface + local elevation
                 const currentElevation = this.planet.getElevation(flow.position);
                 flow.position.normalize().multiplyScalar(5 + currentElevation + 0.05);
                 
                 flow.distance += FLOW.TRACER_SPEED;
                 
-                // Record path on planet texture
                 this.planet.addRiverPoint(flow.position, FLOW.INTENSITY_STEP, flow.isWater);
             }
 
@@ -87,7 +82,6 @@ export class FlowEngine {
                 this.activeFlows.splice(i, 1);
                 if (this.activeFlows.length === 0) this.tracerMesh.visible = false;
             } else if (i === 0) {
-                // Only show the first active flow tracer for performance/visuals
                 this.tracerMesh.position.copy(flow.position);
             }
         }

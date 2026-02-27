@@ -7,11 +7,16 @@ export const PLANET = {
 };
 
 export const FLOW = {
-    TRACER_SPEED: 0.08,
+    TRACER_SPEED: 0.04,
     TRACER_RADIUS: 0.04,
     MAX_DISTANCE: 250,
     INTENSITY_STEP: 3,
     MAX_INTENSITY: 255
+};
+
+export const EDIT = {
+    BRUSH_RADIUS: 0.8,
+    STRENGTH: 0.05
 };
 
 export const MODES = {

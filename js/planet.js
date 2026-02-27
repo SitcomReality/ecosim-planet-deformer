@@ -4,11 +4,13 @@ import { PLANET } from './constants.js';
 export class Planet {
     constructor(scene) {
         this.scene = scene;
-        this.heightmap = new Map();
         this.riverIntensity = new Map();
         
         this.initTexture();
         this.initMesh();
+        
+        // Use an array for elevations for better performance and easier lookup
+        this.elevations = new Float32Array(this.mesh.geometry.attributes.position.count);
     }
 
     initTexture() {
@@ -41,36 +43,51 @@ export class Planet {
         this.initialPositions = geometry.attributes.position.array.slice();
     }
 
-    getKey(x, y, z) {
-        return `${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)}`;
+    getElevation(localPos) {
+        // Map local position to spherical coordinates to find grid index
+        const normal = localPos.clone().normalize();
+        const u = (Math.atan2(normal.z, normal.x) / (Math.PI * 2)) + 0.5;
+        const v = (Math.acos(normal.y) / Math.PI);
+        
+        const xIdx = Math.round(u * PLANET.SEGMENTS);
+        const yIdx = Math.round(v * PLANET.SEGMENTS);
+        const index = yIdx * (PLANET.SEGMENTS + 1) + xIdx;
+        
+        return this.elevations[index] || 0;
     }
 
-    getElevation(position) {
-        const key = this.getKey(position.x, position.y, position.z);
-        return this.heightmap.get(key) || 0;
-    }
+    deform(localPoint, delta, radius) {
+        const posAttr = this.mesh.geometry.attributes.position;
+        const v = new THREE.Vector3();
+        let changed = false;
 
-    setElevation(position, value, isRelative = false) {
-        const key = this.getKey(position.x, position.y, position.z);
-        const current = this.heightmap.get(key) || 0;
-        const next = isRelative ? current + value : value;
-        this.heightmap.set(key, THREE.MathUtils.clamp(next, -1.0, 2.0));
-        this.updateGeometry();
+        for (let i = 0; i < posAttr.count; i++) {
+            v.fromArray(this.initialPositions, i * 3);
+            const dist = v.distanceTo(localPoint);
+            
+            if (dist < radius) {
+                const falloff = 1.0 - (dist / radius);
+                this.elevations[i] += delta * falloff;
+                this.elevations[i] = THREE.MathUtils.clamp(this.elevations[i], -1.0, 2.5);
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            this.updateGeometry();
+        }
     }
 
     updateGeometry() {
         const positions = this.mesh.geometry.attributes.position;
+        const v = new THREE.Vector3();
         
         for (let i = 0; i < positions.count; i++) {
-            const idx = i * 3;
-            const ox = this.initialPositions[idx];
-            const oy = this.initialPositions[idx + 1];
-            const oz = this.initialPositions[idx + 2];
+            v.fromArray(this.initialPositions, i * 3);
+            const normal = v.clone().normalize();
+            const elevation = this.elevations[i];
             
-            const normal = new THREE.Vector3(ox, oy, oz).normalize();
-            const elevation = this.heightmap.get(this.getKey(ox, oy, oz)) || 0;
-            
-            const newPos = normal.clone().multiplyScalar(PLANET.RADIUS + elevation);
+            const newPos = normal.multiplyScalar(PLANET.RADIUS + elevation);
             positions.setXYZ(i, newPos.x, newPos.y, newPos.z);
         }
         
