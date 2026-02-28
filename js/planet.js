@@ -29,7 +29,7 @@ export class Planet {
     initMesh() {
         const geometry = new THREE.SphereGeometry(PLANET.RADIUS, PLANET.SEGMENTS, PLANET.SEGMENTS);
         const material = new THREE.MeshStandardMaterial({
-            color: PLANET.COLOR_BASE,
+            color: 0xffffff, // Use white so the texture colors show through correctly
             roughness: 0.8,
             metalness: 0.1,
             flatShading: true,
@@ -46,9 +46,12 @@ export class Planet {
     getElevation(localPos) {
         // Map local position to spherical coordinates to find grid index
         const normal = localPos.clone().normalize();
-        const u = (Math.atan2(normal.z, normal.x) / (Math.PI * 2)) + 0.5;
+        let u = (Math.atan2(normal.z, normal.x) / (Math.PI * 2)) + 0.5;
         const v = (Math.acos(normal.y) / Math.PI);
         
+        // Ensure u is in [0, 1]
+        u = ((u % 1) + 1) % 1;
+
         const xIdx = Math.round(u * PLANET.SEGMENTS);
         const yIdx = Math.round(v * PLANET.SEGMENTS);
         const index = yIdx * (PLANET.SEGMENTS + 1) + xIdx;
@@ -56,14 +59,22 @@ export class Planet {
         return this.elevations[index] || 0;
     }
 
+    getKey(x, y, z) {
+        // Use a spatial key for accumulation tracking
+        const precision = 10;
+        return `${Math.round(x * precision)},${Math.round(y * precision)},${Math.round(z * precision)}`;
+    }
+
     deform(localPoint, delta, radius) {
         const posAttr = this.mesh.geometry.attributes.position;
         const v = new THREE.Vector3();
+        // Project localPoint to the base sphere to ensure brush works consistently on hills/valleys
+        const projectedHit = localPoint.clone().normalize().multiplyScalar(PLANET.RADIUS);
         let changed = false;
 
         for (let i = 0; i < posAttr.count; i++) {
             v.fromArray(this.initialPositions, i * 3);
-            const dist = v.distanceTo(localPoint);
+            const dist = v.distanceTo(projectedHit);
             
             if (dist < radius) {
                 const falloff = 1.0 - (dist / radius);

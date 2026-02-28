@@ -84,6 +84,14 @@ class App {
     animate() {
         requestAnimationFrame(() => this.animate());
         
+        // Handle continuous spawning for Spring/Volcano modes
+        if (this.isMouseDown && (this.ui.state.mode === MODES.SPRING || this.ui.state.mode === MODES.VOLCANO)) {
+            // Only trigger every few frames or check if the flow is active
+            if (Math.random() > 0.8) {
+                this.handleInteraction(false);
+            }
+        }
+
         this.planet.update();
         this.flowEngine.update();
         this.sceneManager.render();
